@@ -4,18 +4,46 @@ import { notFound } from "next/navigation";
 import { ProductGrid } from "@/components/shop/product-card";
 import { ProductGallery } from "@/components/shop/product-gallery";
 import { ProductPurchase } from "@/components/shop/product-purchase";
-import { formatTND } from "@/lib/money";
-import { getProductBySlug, getRelatedProducts } from "@/lib/services/catalog";
+import { formatTND, millimesToTndInput } from "@/lib/money";
+import { getProductBySlug, getRelatedProducts, type ProductDetail } from "@/lib/services/catalog";
+import { isShareableImage, siteUrl } from "@/lib/site";
 
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const product = await getProductBySlug((await params).slug);
   if (!product) return { title: "Product not found" };
+  const description = product.description.slice(0, 160);
+  const images = product.images.map((i) => i.url).filter(isShareableImage).slice(0, 4);
   return {
     title: product.name,
-    description: product.description.slice(0, 160),
+    description,
     alternates: { canonical: `/product/${product.slug}` },
+    openGraph: { title: product.name, description, url: `/product/${product.slug}`, images },
+  };
+}
+
+/** schema.org Product, so search engines can show price and availability. */
+function productJsonLd(product: ProductDetail) {
+  const base = siteUrl();
+  const inStock = product.variants.some((v) => v.stock > 0);
+  return {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    description: product.description,
+    sku: product.slug,
+    brand: { "@type": "Brand", name: "FLOCK OFF" },
+    category: product.category.name,
+    image: product.images.map((i) => new URL(i.url, base).toString()),
+    url: new URL(`/product/${product.slug}`, base).toString(),
+    offers: {
+      "@type": "Offer",
+      priceCurrency: "TND",
+      price: millimesToTndInput(product.price),
+      availability: inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+      url: new URL(`/product/${product.slug}`, base).toString(),
+    },
   };
 }
 
@@ -27,6 +55,11 @@ export default async function ProductPage({ params }: Props) {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <script
+        type="application/ld+json"
+        // Escape "<" so text from the database can never close the script tag.
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd(product)).replace(/</g, "\\u003c") }}
+      />
       <nav aria-label="Breadcrumb" className="mb-6 text-xs text-muted-foreground">
         <ol className="flex flex-wrap items-center gap-1.5">
           <li>

@@ -3,8 +3,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Runtime queries. On Neon/Supabase this is the pooled connection (serverless-friendly).
+  url       = env("DATABASE_URL")
+  // Migrations need a direct (non-pooled) connection. Locally it's the same URL.
+  directUrl = env("DIRECT_URL")
 }
 
 // All money fields are integer millimes (1 TND = 1000 millimes).

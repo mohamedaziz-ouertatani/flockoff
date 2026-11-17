@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Anton, Geist, Geist_Mono } from "next/font/google";
+import { SITE_DESCRIPTION, SITE_NAME, siteUrl } from "@/lib/site";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -20,8 +21,19 @@ const anton = Anton({
 });
 
 export const metadata: Metadata = {
-  title: { default: "FLOCK OFF", template: "%s · FLOCK OFF" },
-  description: "Independent streetwear brand from Tunis.",
+  metadataBase: siteUrl(),
+  title: { default: `${SITE_NAME} · Streetwear from Tunis`, template: `%s · ${SITE_NAME}` },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    locale: "en_TN",
+    title: `${SITE_NAME} · Streetwear from Tunis`,
+    description: SITE_DESCRIPTION,
+  },
+  twitter: { card: "summary_large_image" },
+  formatDetection: { telephone: false },
 };
 
 export default function RootLayout({

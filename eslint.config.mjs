@@ -15,6 +15,10 @@ const eslintConfig = [
     ignores: [
       "node_modules/**",
       ".next/**",
+      ".next-*/**", // side-by-side builds (NEXT_DIST_DIR), e.g. .next-e2e
+      "test-results/**",
+      "playwright-report/**",
+      "uploads/**",
       "out/**",
       "build/**",
       "next-env.d.ts",

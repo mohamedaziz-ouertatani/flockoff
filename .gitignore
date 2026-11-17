@@ -44,3 +44,6 @@ next-env.d.ts
 # local image uploads (STORAGE_DRIVER=local)
 /uploads
 /.next-build/
+/.next-e2e/
+/test-results/
+/playwright-report/

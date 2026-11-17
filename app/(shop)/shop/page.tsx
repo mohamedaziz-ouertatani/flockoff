@@ -24,7 +24,20 @@ async function resolveNames(params: RawSearchParams) {
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const { category, collection } = await resolveNames(await searchParams);
   const title = [collection?.name, category?.name].filter(Boolean).join(" · ") || "Shop all";
-  return { title, alternates: { canonical: "/shop" } };
+  // Collection/category views are real landing pages; price, sort and page variants are not.
+  const canonical = new URLSearchParams();
+  if (collection) canonical.set("collection", collection.slug);
+  if (category) canonical.set("category", category.slug);
+  const qs = canonical.toString();
+  return {
+    title,
+    description: collection
+      ? `Shop the ${collection.name} collection from FLOCK OFF, streetwear from Tunis.`
+      : category
+        ? `FLOCK OFF ${category.name.toLowerCase()}s. Streetwear from Tunis, cash on delivery.`
+        : undefined,
+    alternates: { canonical: qs ? `/shop?${qs}` : "/shop" },
+  };
 }
 
 export default async function ShopPage({ searchParams }: Props) {

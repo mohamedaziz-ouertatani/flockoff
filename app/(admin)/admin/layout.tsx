@@ -40,8 +40,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </form>
         </div>
       </header>
-      <div className="mx-auto grid max-w-[90rem] gap-6 px-4 py-6 sm:px-6 md:grid-cols-[14rem_1fr]">
-        <aside className="md:sticky md:top-20 md:self-start">
+      {/* minmax(0,1fr): without it the mobile column grows to the nav's full scroll width. */}
+      <div className="mx-auto grid max-w-[90rem] grid-cols-[minmax(0,1fr)] gap-6 px-4 py-6 sm:px-6 md:grid-cols-[14rem_minmax(0,1fr)]">
+        <aside className="min-w-0 md:sticky md:top-20 md:self-start">
           <AdminNav />
         </aside>
         <main className="min-w-0">{children}</main>
