@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { productInputSchema } from "./admin";
+import { signupSchema } from "./auth";
 import { parseSearchQuery, parseShopFilters } from "./catalog";
 import { placeOrderSchema } from "./checkout";
 
@@ -104,5 +105,47 @@ describe("productInputSchema", () => {
     expect(productInputSchema.safeParse({ ...base, variants: [{ size: "M", stock: -1, expectedStock: null }] }).success).toBe(false);
     expect(productInputSchema.safeParse({ ...base, price: "0" }).success).toBe(false);
     expect(productInputSchema.safeParse({ ...base, slug: "Bad Slug" }).success).toBe(false);
+  });
+});
+
+describe("signupSchema", () => {
+  const valid = {
+    firstName: "Yasmine",
+    lastName: "Trabelsi",
+    email: " Yasmine@Example.COM ",
+    phone: "",
+    password: "correct horse",
+    confirmPassword: "correct horse",
+  };
+
+  it("normalises email and treats an empty phone as none", () => {
+    const r = signupSchema.parse(valid);
+    expect(r.email).toBe("yasmine@example.com");
+    expect(r.phone).toBeNull();
+  });
+
+  it("normalises a Tunisian phone when given", () => {
+    expect(signupSchema.parse({ ...valid, phone: "22 123 456" }).phone).toBe("+21622123456");
+    expect(signupSchema.safeParse({ ...valid, phone: "12345" }).success).toBe(false);
+  });
+
+  it("requires matching passwords of at least 8 characters", () => {
+    expect(signupSchema.safeParse({ ...valid, password: "short", confirmPassword: "short" }).success).toBe(false);
+    const mismatch = signupSchema.safeParse({ ...valid, confirmPassword: "correct horse!" });
+    expect(mismatch.success).toBe(false);
+    expect(mismatch.error?.issues[0].path).toEqual(["confirmPassword"]);
+  });
+
+  it("rejects passwords bcrypt would silently truncate (> 72 bytes)", () => {
+    const ok = "a".repeat(72);
+    expect(signupSchema.safeParse({ ...valid, password: ok, confirmPassword: ok }).success).toBe(true);
+    // 25 Arabic letters = 50 bytes in UTF-8; 37 of them = 74 bytes, over the limit despite being 37 chars.
+    const arabic = "ب".repeat(37);
+    expect(signupSchema.safeParse({ ...valid, password: arabic, confirmPassword: arabic }).success).toBe(false);
+  });
+
+  it("ignores any role field (it isn't part of the schema)", () => {
+    const r = signupSchema.parse({ ...valid, role: "ADMIN" });
+    expect(r).not.toHaveProperty("role");
   });
 });

@@ -42,9 +42,8 @@ export async function SiteHeader() {
               <Link href="/admin">Admin</Link>
             </Button>
           )}
-          {/* Account pages arrive with Phase 3; until then this is the login entry point. */}
-          <Button asChild variant="ghost" size="icon" aria-label={session?.user ? "Account" : "Log in"}>
-            <Link href="/login">
+          <Button asChild variant="ghost" size="icon" aria-label={session?.user ? "Your account" : "Log in"}>
+            <Link href={session?.user ? "/account" : "/login"}>
               <UserIcon />
             </Link>
           </Button>
