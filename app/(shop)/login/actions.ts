@@ -1,6 +1,6 @@
 "use server";
 
-import { AuthError } from "next-auth";
+import { AuthError, CredentialsSignin } from "next-auth";
 import { z } from "zod";
 import { signIn } from "@/auth";
 import { safeCallbackUrl } from "@/lib/safe-redirect";
@@ -31,6 +31,9 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
     });
   } catch (err) {
     if (err instanceof AuthError) {
+      if (err instanceof CredentialsSignin && err.code === "rate_limited") {
+        return { email, error: "Too many login attempts. Please wait a few minutes and try again." };
+      }
       return { email, error: "Invalid email or password." };
     }
     throw err; // NEXT_REDIRECT must propagate

@@ -111,6 +111,26 @@ in**. Earlier guest orders with the same email are deliberately not attached: em
 verified, so attaching them would let anyone who signs up with someone else's address read that
 person's orders, including their phone number and home address.
 
+**Rate limiting.** Login and sign-up are rate-limited with counters stored in Postgres
+(`lib/services/rate-limit.ts`), so the limits hold across serverless instances. Emails are hashed
+in the counter keys.
+
+| Limit | Allows | Why |
+| --- | --- | --- |
+| Failed logins, one account from one IP | 5 per 15 min | The main brake on password guessing |
+| Failed logins, one account from anywhere | 50 per hour | Caps guessing even from many IPs, but loose enough that one attacker can't easily lock a customer out |
+| Any login attempt from one IP | 30 per 15 min | Generous for shared networks (offices, mobile carriers) |
+| New accounts from one IP | 10 per hour | Slows bulk account creation |
+
+Successful logins don't count against the failure limits. Login limits are enforced inside the
+Auth.js `authorize` step, so they also cover the direct `POST /api/auth/callback/credentials`
+endpoint, not just the form. Once a limit is hit, the password isn't checked at all.
+
+**Client IPs come from `X-Forwarded-For`.** Vercel overwrites that header with the real client IP,
+so it's trustworthy there. If you self-host, run behind a reverse proxy (nginx, Caddy, Cloudflare)
+that *overwrites* it. Otherwise clients can fake their IP and dodge the per-IP limits; the
+per-account limit still applies.
+
 **Admin.**
 
 - **Access** is checked in three places: `middleware.ts` gates `/admin`, the admin layout checks
@@ -192,7 +212,8 @@ them.
 
 Run `pnpm build && pnpm start` with the same variables, plus **`AUTH_TRUST_HOST=true`** (or
 `AUTH_URL=https://your.domain`). Without it, Auth.js rejects every session with `UntrustedHost`
-and `/admin` redirects to login. The `local` image driver works if the `uploads/` directory is
+and `/admin` redirects to login. Put the app behind a reverse proxy that overwrites
+`X-Forwarded-For` (see *Rate limiting*). The `local` image driver works if the `uploads/` directory is
 on a persistent volume.
 
 ---
@@ -212,5 +233,4 @@ on a persistent volume.
 ## Not in v1
 
 Online payment (Konnect / Flouci), discount codes, email notifications, wishlists, a size guide,
-FR/AR/EN translations, email verification and password reset (both need email sending), and rate
-limiting on login and sign-up.
+FR/AR/EN translations, and email verification and password reset (both need email sending).

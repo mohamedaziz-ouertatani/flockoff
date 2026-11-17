@@ -1,6 +1,8 @@
 "use server";
 
+import { headers } from "next/headers";
 import { AuthError } from "next-auth";
+import { clientIp, hit, humanizeWait, LIMITS } from "@/lib/services/rate-limit";
 import { z } from "zod";
 import { signIn } from "@/auth";
 import { safeCallbackUrl } from "@/lib/safe-redirect";
@@ -34,6 +36,12 @@ export async function signupAction(_prev: SignupState, formData: FormData): Prom
       values,
       fieldErrors: Object.fromEntries(Object.entries(fe).map(([k, v]) => [k, v?.[0]])) as SignupState["fieldErrors"],
     };
+  }
+
+  // Counted only for valid submissions, so typos don't use up the allowance.
+  const limit = await hit(LIMITS.signupPerIp, clientIp(await headers()));
+  if (!limit.allowed) {
+    return { values, error: `Too many new accounts from this network. Please try again in ${humanizeWait(limit.retryAfterMs)}.` };
   }
 
   try {

@@ -51,6 +51,17 @@ model User {
   orders       Order[]
 }
 
+/// Fixed-window counters for rate limiting (login, sign-up). Keys never contain raw emails:
+/// they're hashed. Old windows are pruned opportunistically.
+model RateLimit {
+  key         String
+  windowStart DateTime
+  count       Int      @default(0)
+
+  @@id([key, windowStart])
+  @@index([windowStart])
+}
+
 model Address {
   id      String  @id @default(cuid())
   userId  String?
