@@ -14,6 +14,11 @@ export const MIN_PASSWORD_LENGTH = 8;
 /** bcrypt ignores everything past 72 bytes, so longer passwords would be silently truncated. */
 export const MAX_PASSWORD_BYTES = 72;
 
+const newPasswordField = z
+  .string()
+  .min(MIN_PASSWORD_LENGTH, `Use at least ${MIN_PASSWORD_LENGTH} characters`)
+  .refine((p) => new TextEncoder().encode(p).length <= MAX_PASSWORD_BYTES, "That password is too long (max 72 bytes)");
+
 const name = (label: string) => z.string().trim().min(1, `${label} is required`).max(60, `${label} is too long`);
 
 export const signupSchema = z
@@ -34,10 +39,7 @@ export const signupSchema = z
         }
         return n;
       }),
-    password: z
-      .string()
-      .min(MIN_PASSWORD_LENGTH, `Use at least ${MIN_PASSWORD_LENGTH} characters`)
-      .refine((p) => new TextEncoder().encode(p).length <= MAX_PASSWORD_BYTES, "That password is too long (max 72 bytes)"),
+    password: newPasswordField,
     confirmPassword: z.string(),
   })
   .refine((d) => d.password === d.confirmPassword, { path: ["confirmPassword"], message: "Passwords don't match" });
@@ -45,3 +47,15 @@ export const signupSchema = z
 export type SignupInput = z.input<typeof signupSchema>;
 export type SignupData = z.output<typeof signupSchema>;
 export type SignupField = keyof SignupInput;
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Enter your current password").max(200),
+    newPassword: newPasswordField,
+    confirmPassword: z.string(),
+  })
+  .refine((d) => d.newPassword === d.confirmPassword, { path: ["confirmPassword"], message: "Passwords don't match" })
+  .refine((d) => d.newPassword !== d.currentPassword, { path: ["newPassword"], message: "Choose a password you aren't using now" });
+
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type ChangePasswordField = keyof ChangePasswordInput;

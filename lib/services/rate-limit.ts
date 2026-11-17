@@ -23,6 +23,8 @@ export const LIMITS = {
   loginPerEmailTrusted: { name: "login:email:trusted", max: 50, windowMs: 60 * 60_000 },
   /** New accounts from one IP. */
   signupPerIp: { name: "signup:ip", max: 10, windowMs: 60 * 60_000 },
+  /** Wrong current passwords on the change-password form, per account (a stolen session can't brute-force it). */
+  passwordChangePerUser: { name: "password-change:user", max: 5, windowMs: 15 * 60_000 },
 } as const satisfies Record<string, Limit>;
 
 function keyFor(limit: Limit, subject: string) {

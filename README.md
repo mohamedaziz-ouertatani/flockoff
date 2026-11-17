@@ -54,7 +54,7 @@ pnpm dev                # http://localhost:3000
 | --------------- | ------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | **Unit**        | `lib/**/*.test.ts`        | nothing               | `formatTND`, TND parsing, totals, stock clamping, phone numbers, Zod schemas, cart store                          |
 | **Integration** | `tests/integration/`      | Postgres (`db:up`)    | Checkout transaction (no overselling under 8 concurrent buyers, rollbacks, tampered totals), cancel/restock races, stock edits vs. concurrent sales |
-| **End to end**  | `tests/e2e/`              | Postgres + Chromium   | Guest checkout (size error, stock-capped quantity, badge, totals, validation, confirmation); sign-up → order → order history |
+| **End to end**  | `tests/e2e/`              | Postgres + Chromium   | Guest checkout (size error, stock-capped quantity, badge, totals, validation, confirmation); sign-up → order → order history → change password → log in with the new one |
 
 Integration and e2e tests use a **separate database**, `flockoff_test`, on the same Postgres
 container (override with `TEST_DATABASE_URL`). Setup only runs `prisma migrate deploy` (never a
@@ -74,7 +74,7 @@ only inside the job. If the e2e tests fail, the Playwright report and traces are
 
 ```
 app/(shop)/             storefront: home, /shop, /search, /product/[slug], /cart, /checkout, /order/[code],
-                        /login, /signup, /account (order history)
+                        /login, /signup, /account (order history, change password)
 app/(admin)/admin/      admin panel (dashboard, orders, products & stock, customers, catalog)
 app/placeholder/        generated SVG placeholder images (solid color + product name)
 app/uploads/            serves images stored by the local storage driver
@@ -116,6 +116,12 @@ because bcrypt silently ignores anything longer. `/account` lists orders placed 
 in**. Earlier guest orders with the same email are deliberately not attached: emails aren't
 verified, so attaching them would let anyone who signs up with someone else's address read that
 person's orders, including their phone number and home address.
+
+Customers can change their password on `/account` by entering the current one. Wrong current
+passwords are limited to 5 per 15 minutes per account, so a hijacked session can't be used to guess
+it. The write is compare-and-set, so two simultaneous changes can't overwrite each other. A change
+revokes the trusted-device cookies on the account's other browsers (see *Trusted devices*). Sessions
+already open elsewhere stay logged in until they expire, because sessions are stateless JWTs.
 
 **Rate limiting.** Login and sign-up are rate-limited with counters stored in Postgres
 (`lib/services/rate-limit.ts`), so the limits hold across serverless instances. Emails are hashed

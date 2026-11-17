@@ -9,6 +9,7 @@ import { formatTND } from "@/lib/money";
 import { formatTunisianPhone } from "@/lib/phone";
 import { getAccount, listAccountOrders } from "@/lib/services/accounts";
 import { cn } from "@/lib/utils";
+import { ChangePasswordForm } from "./change-password-form";
 
 export const metadata: Metadata = { title: "Your account", robots: { index: false } };
 
@@ -126,6 +127,11 @@ export default async function AccountPage() {
               <dd>{formatDate(account.createdAt)}</dd>
             </div>
           </dl>
+
+          <h2 id="password-heading" className="mt-10 mb-4 text-[11px] font-semibold tracking-widest uppercase">
+            Password
+          </h2>
+          <ChangePasswordForm />
         </aside>
       </div>
     </div>

@@ -24,7 +24,12 @@ function deviceBinding(user: { id: string; passwordHash: string }) {
   return `${user.id}|${fingerprint}`;
 }
 
-type SessionUser = { id: string; email: string; name: string; role: "CUSTOMER" | "ADMIN" };
+/** A fresh trusted-device token for this user's current password (null without AUTH_SECRET). */
+export function deviceTokenFor(user: { id: string; passwordHash: string }) {
+  return createTrustedDeviceToken(deviceBinding(user));
+}
+
+type SessionUser ={ id: string; email: string; name: string; role: "CUSTOMER" | "ADMIN" };
 
 export type LoginResult =
   | { status: "ok"; user: SessionUser; /** Fresh trusted-device token to store in the browser (null without AUTH_SECRET). */ deviceToken: string | null }
@@ -61,7 +66,7 @@ export async function attemptLogin(input: LoginInput, ip: string, { deviceToken 
   if (!user || !ok) return { status: "invalid" };
 
   await Promise.all([refund(LIMITS.loginPerEmailIp, `${input.email}|${ip}`), refund(accountLimit, input.email)]);
-  return { status: "ok", user: toSessionUser(user), deviceToken: createTrustedDeviceToken(deviceBinding(user)) };
+  return { status: "ok", user: toSessionUser(user), deviceToken: deviceTokenFor(user) };
 }
 
 function toSessionUser(user: { id: string; email: string; firstName: string; lastName: string; role: SessionUser["role"] }): SessionUser {

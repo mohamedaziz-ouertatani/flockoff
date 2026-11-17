@@ -57,9 +57,43 @@ test("customer can sign up, order, and see the order in their account", async ({
   await expect(row).toContainText("Medina Street Tee (L)");
   await expect(row).toContainText("77 TND");
 
-  // Signing up again with the same email is refused.
+  // Change the password: a wrong current password is refused inline, then it works.
+  const newPassword = "e2e brand new passphrase";
+  await page.getByLabel("Current password").fill("not my password");
+  await page.getByLabel("New password", { exact: true }).fill(newPassword);
+  await page.getByLabel("Confirm new password").fill(newPassword);
+  await page.getByRole("button", { name: "Change password" }).click();
+  await expect(page.getByText("That isn't your current password.")).toBeVisible();
+
+  const oldToken = (await page.context().cookies()).find((c) => c.name === "fo_td")?.value;
+  await page.getByLabel("Current password").fill(password);
+  await page.getByLabel("New password", { exact: true }).fill(newPassword);
+  await page.getByLabel("Confirm new password").fill(newPassword);
+  await page.getByRole("button", { name: "Change password" }).click();
+  await expect(page.getByText("Password changed.")).toBeVisible();
+  await expect(page.getByLabel("Current password")).toHaveValue("");
+  // This browser got a new trusted-device token for the new password.
+  const newToken = (await page.context().cookies()).find((c) => c.name === "fo_td")?.value;
+  expect(newToken).toMatch(/^\d+\.[\w-]{43}$/);
+  expect(newToken).not.toBe(oldToken);
+
   await page.getByRole("button", { name: "Sign out" }).click();
   // Wait for sign-out to finish; navigating earlier would still carry the old session.
+  await expect(page).toHaveURL("/");
+  await expect(page.getByRole("link", { name: "Log in" })).toBeVisible();
+
+  // The old password no longer works; the new one does.
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByText("Invalid email or password.")).toBeVisible();
+  await page.getByLabel("Password").fill(newPassword);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL("/account");
+
+  // Signing up again with the same email is refused.
+  await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL("/");
   await expect(page.getByRole("link", { name: "Log in" })).toBeVisible();
   await page.goto("/signup");

@@ -1,10 +1,11 @@
 import { randomBytes } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
-import { EmailTakenError, listAccountOrders, registerCustomer } from "@/lib/services/accounts";
-import { verifyCredentials } from "@/lib/services/auth";
+import { changePassword, EmailTakenError, listAccountOrders, registerCustomer } from "@/lib/services/accounts";
+import { attemptLogin, verifyCredentials } from "@/lib/services/auth";
+import { LIMITS } from "@/lib/services/rate-limit";
 import { createOrder } from "@/lib/services/orders";
-import { signupSchema } from "@/lib/validation/auth";
+import { changePasswordSchema, signupSchema } from "@/lib/validation/auth";
 import { makeProduct, orderInput } from "./fixtures";
 
 afterAll(() => prisma.$disconnect());
@@ -55,5 +56,65 @@ describe("order history", () => {
   it("is empty for a new account", async () => {
     const user = await registerCustomer(signup(newEmail()));
     expect(await listAccountOrders(user.id)).toEqual([]);
+  });
+});
+
+describe("changePassword", () => {
+  const OLD = "correct horse battery";
+  const NEW = "a brand new passphrase";
+  const input = (currentPassword: string, newPassword = NEW) =>
+    changePasswordSchema.parse({ currentPassword, newPassword, confirmPassword: newPassword });
+  const ip = () => `10.9.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
+
+  it("needs the current password, then switches to the new one", async () => {
+    const email = newEmail();
+    const { id } = await registerCustomer(signup(email, OLD));
+
+    expect((await changePassword(id, input("not my password"))).status).toBe("wrong_password");
+    expect(await verifyCredentials({ email, password: OLD })).not.toBeNull();
+
+    const r = await changePassword(id, input(OLD));
+    expect(r.status).toBe("ok");
+    if (r.status === "ok") expect(r.deviceToken).toBeTruthy();
+    expect(await verifyCredentials({ email, password: OLD })).toBeNull();
+    expect(await verifyCredentials({ email, password: NEW })).not.toBeNull();
+  });
+
+  it("revokes trusted-device tokens issued for the old password, but the returned one works", async () => {
+    const email = newEmail();
+    const { id } = await registerCustomer(signup(email, OLD));
+    const before = await attemptLogin({ email, password: OLD }, ip());
+    if (before.status !== "ok" || !before.deviceToken) throw new Error("login failed");
+
+    const r = await changePassword(id, input(OLD));
+    if (r.status !== "ok" || !r.deviceToken) throw new Error("change failed");
+
+    // Use up the normal per-account bucket so only a valid trusted-device token can get in.
+    for (let i = 0; i < LIMITS.loginPerEmail.max; i++) await attemptLogin({ email, password: `guess-${i}` }, ip());
+    expect((await attemptLogin({ email, password: NEW }, ip(), { deviceToken: before.deviceToken })).status).toBe("rate_limited");
+    expect((await attemptLogin({ email, password: NEW }, ip(), { deviceToken: r.deviceToken })).status).toBe("ok");
+  }, 120_000);
+
+  it("limits wrong current-password guesses per account", async () => {
+    const { id } = await registerCustomer(signup(newEmail(), OLD));
+    for (let i = 0; i < LIMITS.passwordChangePerUser.max; i++) {
+      expect((await changePassword(id, input(`guess-${i}`))).status).toBe("wrong_password");
+    }
+    expect((await changePassword(id, input(OLD))).status).toBe("rate_limited");
+  });
+
+  it("two concurrent changes: exactly one wins, the other writes nothing", async () => {
+    const email = newEmail();
+    const { id } = await registerCustomer(signup(email, OLD));
+    const results = await Promise.all([changePassword(id, input(OLD, "first new password")), changePassword(id, input(OLD, "second new password"))]);
+    const statuses = results.map((r) => r.status).sort();
+    expect(statuses).toEqual(["conflict", "ok"]);
+    const winner = results[0].status === "ok" ? "first new password" : "second new password";
+    expect(await verifyCredentials({ email, password: winner })).not.toBeNull();
+  });
+
+  it("rejects reusing the current password and mismatched confirmation", () => {
+    expect(changePasswordSchema.safeParse({ currentPassword: OLD, newPassword: OLD, confirmPassword: OLD }).success).toBe(false);
+    expect(changePasswordSchema.safeParse({ currentPassword: OLD, newPassword: NEW, confirmPassword: "nope" }).success).toBe(false);
   });
 });

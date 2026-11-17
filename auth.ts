@@ -2,33 +2,14 @@ import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { authConfig } from "@/auth.config";
 import { attemptLogin } from "@/lib/services/auth";
-import { cookies } from "next/headers";
 import { clientIp } from "@/lib/services/rate-limit";
-import { readCookie, TRUSTED_DEVICE_COOKIE, TRUSTED_DEVICE_TTL_MS } from "@/lib/services/trusted-device";
+import { readCookie, TRUSTED_DEVICE_COOKIE } from "@/lib/services/trusted-device";
+import { setTrustedDeviceCookie } from "@/lib/trusted-device-cookie";
 import { loginSchema } from "@/lib/validation/auth";
 
 /** Thrown from authorize so the login form can say "too many attempts" instead of "wrong password". */
 export class RateLimitedSignin extends CredentialsSignin {
   code = "rate_limited";
-}
-
-/**
- * Marks this browser as a trusted device (see lib/services/trusted-device.ts). Works in the
- * server-action and route-handler contexts authorize runs in; if cookies can't be set, the login
- * still succeeds, the device just isn't remembered.
- */
-async function rememberDevice(token: string) {
-  try {
-    (await cookies()).set(TRUSTED_DEVICE_COOKIE, token, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: Math.floor(TRUSTED_DEVICE_TTL_MS / 1000),
-    });
-  } catch (e) {
-    console.warn("could not set trusted-device cookie", e);
-  }
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -45,7 +26,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const result = await attemptLogin(parsed.data, clientIp(request.headers), { deviceToken });
         if (result.status === "rate_limited") throw new RateLimitedSignin();
         if (result.status !== "ok") return null;
-        if (result.deviceToken) await rememberDevice(result.deviceToken);
+        await setTrustedDeviceCookie(result.deviceToken);
         return result.user;
       },
     }),
