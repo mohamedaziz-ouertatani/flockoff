@@ -3,7 +3,7 @@
 Online store for FLOCK OFF, an independent streetwear brand from Tunis. Customer shop and admin
 panel in one Next.js 15 app. See [CLAUDE.md](CLAUDE.md) for the full build spec.
 
-> Status: **Phase 2** — storefront: home, shop with URL filters, search, product page.
+> Status: **Phase 3** — cart, checkout (cash on delivery) and order confirmation.
 
 ## Stack
 
@@ -65,3 +65,15 @@ prisma/               schema, migrations, seed
   instead of destroying order history.
 
 Deployment notes (Vercel + Neon/Supabase) arrive in Phase 5.
+
+## Checkout and orders
+
+- The cart is a Zustand store persisted to `localStorage` (`flockoff-cart`). Prices and stock in
+  it are a display cache, refreshed from the server whenever the cart or checkout opens.
+- `placeOrder` (server action) re-validates input with Zod, then `lib/services/orders.ts` runs one
+  `prisma.$transaction`: reload prices, recompute totals (refusing if they differ from what the
+  shopper saw), decrement each variant with a conditional `UPDATE … WHERE stock >= qty`, and
+  insert the order with name/size/price snapshots. Any shortfall rolls the whole order back.
+- Order confirmation pages (`/order/FO-XXXX`) show personal details only to the browser that
+  placed the order (httpOnly cookie of order ids), the owning account, or an admin. Short codes
+  are guessable, so everyone else sees just the status.

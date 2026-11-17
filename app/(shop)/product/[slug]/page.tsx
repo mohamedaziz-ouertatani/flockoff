@@ -64,7 +64,16 @@ export default async function ProductPage({ params }: Props) {
             <p className="text-xl tabular-nums">{formatTND(product.price)}</p>
           </div>
 
-          <ProductPurchase variants={product.variants} />
+          <ProductPurchase
+            product={{
+              id: product.id,
+              slug: product.slug,
+              name: product.name,
+              price: product.price,
+              imageUrl: product.images[0]?.url ?? null,
+            }}
+            variants={product.variants}
+          />
 
           <div className="flex flex-col gap-3 border-t pt-6 text-sm">
             <p className="leading-relaxed text-muted-foreground">{product.description}</p>

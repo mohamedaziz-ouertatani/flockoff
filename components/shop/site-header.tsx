@@ -3,6 +3,7 @@ import { UserIcon } from "lucide-react";
 import { auth } from "@/auth";
 import { getCollections } from "@/lib/services/catalog";
 import { Button } from "@/components/ui/button";
+import { CartButton } from "./cart-button";
 import { MobileNav } from "./mobile-nav";
 import { SearchOverlay } from "./search-overlay";
 
@@ -47,6 +48,7 @@ export async function SiteHeader() {
               <UserIcon />
             </Link>
           </Button>
+          <CartButton />
         </div>
       </div>
     </header>

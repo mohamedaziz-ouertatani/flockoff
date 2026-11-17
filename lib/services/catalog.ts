@@ -191,6 +191,40 @@ export const getProductBySlug = cache(async (slug: string) => {
 
 export type ProductDetail = NonNullable<Awaited<ReturnType<typeof getProductBySlug>>>;
 
+/** Current price/stock/availability for cart lines, so a stale localStorage cart can be refreshed. */
+export async function getVariantSnapshots(variantIds: string[]) {
+  if (variantIds.length === 0) return [];
+  const rows = await prisma.variant.findMany({
+    where: { id: { in: variantIds } },
+    select: {
+      id: true,
+      size: true,
+      stock: true,
+      product: {
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          price: true,
+          isActive: true,
+          images: { select: { url: true }, orderBy: { position: "asc" }, take: 1 },
+        },
+      },
+    },
+  });
+  return rows.map((v) => ({
+    variantId: v.id,
+    productId: v.product.id,
+    slug: v.product.slug,
+    name: v.product.name,
+    size: v.size,
+    unitPrice: v.product.price,
+    imageUrl: v.product.images[0]?.url ?? null,
+    stock: v.stock,
+    active: v.product.isActive,
+  }));
+}
+
 export async function getRelatedProducts(productId: string, categorySlug: string, limit = 4) {
   const rows = await prisma.product.findMany({
     where: { isActive: true, id: { not: productId }, category: { slug: categorySlug } },

@@ -1,45 +1,83 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
+import { CheckIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCart } from "@/lib/cart/store";
 import { clampQuantity, LOW_STOCK_THRESHOLD } from "@/lib/stock";
 import { Button } from "@/components/ui/button";
 import { QuantityStepper } from "./quantity-stepper";
 
 type Variant = { id: string; size: string; stock: number };
+type ProductMeta = { id: string; slug: string; name: string; price: number; imageUrl: string | null };
+
+type Status = { kind: "added"; text: string } | { kind: "error"; text: string } | null;
 
 /**
- * Size selector + quantity + Add to Cart. Errors are shown inline next to the control they
- * belong to (no toasts). The cart itself arrives in Phase 3; `handleAdd` is where it plugs in.
+ * Size selector + quantity + Add to Cart. Errors are inline next to the control they belong to.
+ * The selectable quantity accounts for what's already in the cart, so cart + new never exceeds stock.
  */
-export function ProductPurchase({ variants }: { variants: Variant[] }) {
+export function ProductPurchase({ product, variants }: { product: ProductMeta; variants: Variant[] }) {
   const [variantId, setVariantId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [sizeError, setSizeError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [status, setStatus] = useState<Status>(null);
+
+  const add = useCart((s) => s.add);
+  const hydrated = useCart((s) => s.hydrated);
+  const lines = useCart((s) => s.lines);
 
   const selected = variants.find((v) => v.id === variantId) ?? null;
   const soldOut = variants.every((v) => v.stock <= 0);
-  const max = selected?.stock ?? 1;
+  const inCart = (id: string) => (hydrated ? (lines.find((l) => l.variantId === id)?.quantity ?? 0) : 0);
+  const remaining = selected ? Math.max(0, selected.stock - inCart(selected.id)) : 0;
 
   function pickSize(v: Variant) {
     setVariantId(v.id);
     setSizeError(null);
-    setNotice(null);
-    // Switching to a size with less stock must not leave an impossible quantity behind.
-    setQuantity((q) => clampQuantity(q, v.stock));
+    setStatus(null);
+    // Switching to a size with less room must not leave an impossible quantity behind.
+    setQuantity((q) => clampQuantity(q, Math.max(1, v.stock - inCart(v.id))));
   }
 
   function handleAdd() {
-    setNotice(null);
+    setStatus(null);
     if (!selected) {
       setSizeError("Please select a size.");
       return;
     }
-    const qty = clampQuantity(quantity, selected.stock);
-    if (qty !== quantity) setQuantity(qty);
-    // TODO(phase 3): add { variantId: selected.id, quantity: qty } to the cart store.
-    setNotice(`Size ${selected.size} × ${qty} selected. The cart arrives in the next build phase.`);
+    if (remaining <= 0) {
+      setStatus({ kind: "error", text: `All ${selected.stock} available in ${selected.size} are already in your cart.` });
+      return;
+    }
+    const result = add(
+      {
+        variantId: selected.id,
+        productId: product.id,
+        slug: product.slug,
+        name: product.name,
+        size: selected.size,
+        unitPrice: product.price,
+        imageUrl: product.imageUrl,
+        maxStock: selected.stock,
+      },
+      clampQuantity(quantity, remaining),
+    );
+    if (!result.ok) {
+      setStatus({
+        kind: "error",
+        text: result.reason === "cart-full" ? "Your cart is full. Check out or remove something first." : "This size is out of stock.",
+      });
+      return;
+    }
+    setQuantity(1);
+    setStatus({
+      kind: "added",
+      text: result.clamped
+        ? `Added. You now have the maximum available (${result.quantityInCart}) in your cart.`
+        : `Added to cart. You have ${result.quantityInCart} in size ${selected.size}.`,
+    });
   }
 
   if (soldOut) {
@@ -56,11 +94,9 @@ export function ProductPurchase({ variants }: { variants: Variant[] }) {
   return (
     <div className="flex flex-col gap-6">
       <fieldset aria-describedby={sizeError ? "size-error" : undefined}>
-        <div className="mb-3 flex items-baseline justify-between">
-          <legend className="text-[11px] font-semibold tracking-widest uppercase">
-            Size{selected && <span className="ml-2 font-normal text-muted-foreground normal-case">{selected.size}</span>}
-          </legend>
-        </div>
+        <legend className="mb-3 text-[11px] font-semibold tracking-widest uppercase">
+          Size{selected && <span className="ml-2 font-normal text-muted-foreground normal-case">{selected.size}</span>}
+        </legend>
         <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Size">
           {variants.map((v) => {
             const out = v.stock <= 0;
@@ -100,25 +136,43 @@ export function ProductPurchase({ variants }: { variants: Variant[] }) {
         <p className="mb-3 text-[11px] font-semibold tracking-widest uppercase">Quantity</p>
         <QuantityStepper
           value={quantity}
-          max={max}
+          max={Math.max(1, remaining)}
           onChange={(q) => {
             setQuantity(q);
-            setNotice(null);
+            setStatus(null);
           }}
-          disabled={!selected}
+          disabled={!selected || remaining <= 0}
           aria-describedby="qty-hint"
         />
         <p id="qty-hint" className="mt-2 text-xs text-muted-foreground">
-          {selected ? `${selected.stock} available` : "Select a size first"}
+          {!selected
+            ? "Select a size first"
+            : inCart(selected.id) > 0
+              ? `${remaining} more available (${inCart(selected.id)} already in your cart)`
+              : `${selected.stock} available`}
         </p>
       </div>
 
       <Button size="lg" className="h-12 w-full text-sm tracking-widest uppercase" onClick={handleAdd}>
         Add to cart
       </Button>
-      {notice && (
-        <p role="status" className="-mt-3 text-sm text-muted-foreground">
-          {notice}
+      {status && (
+        <p
+          role={status.kind === "error" ? "alert" : "status"}
+          className={cn(
+            "-mt-3 flex items-center gap-2 text-sm",
+            status.kind === "error" ? "text-destructive" : "text-foreground",
+          )}
+        >
+          {status.kind === "added" && <CheckIcon className="size-4 shrink-0" />}
+          <span>
+            {status.text}{" "}
+            {status.kind === "added" && (
+              <Link href="/cart" className="font-medium underline underline-offset-4">
+                View cart
+              </Link>
+            )}
+          </span>
         </p>
       )}
     </div>

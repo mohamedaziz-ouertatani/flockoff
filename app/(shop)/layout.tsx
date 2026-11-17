@@ -1,3 +1,4 @@
+import { CartHydrator } from "@/components/shop/cart-hydrator";
 import { SiteFooter } from "@/components/shop/site-footer";
 import { SiteHeader } from "@/components/shop/site-header";
 
@@ -10,6 +11,7 @@ export default function ShopLayout({ children }: { children: React.ReactNode }) 
       >
         Skip to content
       </a>
+      <CartHydrator />
       <SiteHeader />
       <main id="content" className="flex-1">
         {children}
