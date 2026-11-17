@@ -54,7 +54,7 @@ pnpm dev                # http://localhost:3000
 | --------------- | ------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | **Unit**        | `lib/**/*.test.ts`        | nothing               | `formatTND`, TND parsing, totals, stock clamping, phone numbers, Zod schemas, cart store                          |
 | **Integration** | `tests/integration/`      | Postgres (`db:up`)    | Checkout transaction (no overselling under 8 concurrent buyers, rollbacks, tampered totals), cancel/restock races, stock edits vs. concurrent sales |
-| **End to end**  | `tests/e2e/`              | Postgres + Chromium   | Guest buys a product: size error, stock-capped quantity, cart badge, totals, checkout validation, confirmation    |
+| **End to end**  | `tests/e2e/`              | Postgres + Chromium   | Guest checkout (size error, stock-capped quantity, badge, totals, validation, confirmation); sign-up → order → order history |
 
 Integration and e2e tests use a **separate database**, `flockoff_test`, on the same Postgres
 container (override with `TEST_DATABASE_URL`). Setup only runs `prisma migrate deploy` (never a
@@ -67,7 +67,8 @@ so it can run while `pnpm dev` is up. First time only: `pnpm exec playwright ins
 ## How it's built
 
 ```
-app/(shop)/             storefront: home, /shop, /search, /product/[slug], /cart, /checkout, /order/[code], /login
+app/(shop)/             storefront: home, /shop, /search, /product/[slug], /cart, /checkout, /order/[code],
+                        /login, /signup, /account (order history)
 app/(admin)/admin/      admin panel (dashboard, orders, products & stock, customers, catalog)
 app/placeholder/        generated SVG placeholder images (solid color + product name)
 app/uploads/            serves images stored by the local storage driver
@@ -102,6 +103,13 @@ Any shortfall rolls the whole order back.
 **Order privacy.** Short codes like `FO-7K2Q` are guessable, so `/order/[code]` only shows personal
 details to the browser that placed the order (httpOnly cookie), the owning account, or an admin.
 Access is checked before any personal data is loaded.
+
+**Customer accounts.** Sign-up is optional; guests can always check out. New accounts are always
+`CUSTOMER` (the role is never read from input). Passwords are bcrypt-hashed and capped at 72 bytes,
+because bcrypt silently ignores anything longer. `/account` lists orders placed **while logged
+in**. Earlier guest orders with the same email are deliberately not attached: emails aren't
+verified, so attaching them would let anyone who signs up with someone else's address read that
+person's orders, including their phone number and home address.
 
 **Admin.**
 
@@ -204,5 +212,5 @@ on a persistent volume.
 ## Not in v1
 
 Online payment (Konnect / Flouci), discount codes, email notifications, wishlists, a size guide,
-FR/AR/EN translations, and customer sign-up and order history pages. Orders placed while logged in
-are already linked to the account.
+FR/AR/EN translations, email verification and password reset (both need email sending), and rate
+limiting on login and sign-up.
