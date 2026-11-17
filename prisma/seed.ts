@@ -169,7 +169,8 @@ async function seedAdmin() {
   const passwordHash = await bcrypt.hash(password, 12);
   await prisma.user.upsert({
     where: { email },
-    update: { passwordHash, role: "ADMIN" },
+    // A new password also ends this admin's existing sessions (see the jwt callback in auth.ts).
+    update: { passwordHash, role: "ADMIN", sessionVersion: { increment: 1 } },
     create: {
       email,
       passwordHash,
@@ -181,9 +182,35 @@ async function seedAdmin() {
   console.log(`  admin: ${email}`);
 }
 
+/**
+ * `--admin-only`: create/update the admin and nothing else (production).
+ * Demo data upserts the demo products and RESETS their stock, so it's refused on a non-local
+ * database unless `--with-demo` is passed explicitly (e.g. for a staging/demo site).
+ */
+function isLocalDatabase(url = process.env.DATABASE_URL ?? "") {
+  try {
+    return ["localhost", "127.0.0.1", "[::1]", "::1"].includes(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
 async function main() {
-  console.log("Seeding FLOCK OFF…");
+  const args = new Set(process.argv.slice(2));
+  const adminOnly = args.has("--admin-only");
+  // Checked before writing anything, so a refused run changes nothing.
+  if (!adminOnly && !isLocalDatabase() && !args.has("--with-demo")) {
+    throw new Error(
+      "Refusing to load demo products into a non-local database: it would reset their stock. " +
+        "Use `pnpm db:create-admin` for production, or pass --with-demo for a demo/staging site.",
+    );
+  }
+  console.log(adminOnly ? "Creating the FLOCK OFF admin…" : "Seeding FLOCK OFF…");
   await seedAdmin();
+  if (adminOnly) {
+    console.log("Done (admin only, no demo data).");
+    return;
+  }
 
   const collectionIds = new Map<string, string>();
   for (const c of collections) {

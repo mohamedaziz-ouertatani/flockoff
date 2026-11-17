@@ -16,6 +16,7 @@ const serverEnv = {
   AUTH_SECRET: "e2e-only-secret-not-used-anywhere-else-0123456789",
   AUTH_TRUST_HOST: "true",
   STORAGE_DRIVER: "local",
+  NEXT_PUBLIC_SITE_URL: `http://localhost:${PORT}`,
 };
 
 export default defineConfig({

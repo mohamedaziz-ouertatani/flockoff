@@ -44,7 +44,8 @@ pnpm dev                # http://localhost:3000
 | `pnpm db:up`            | Start Postgres via docker compose                               |
 | `pnpm db:migrate`       | `prisma migrate dev`: create/apply migrations in development    |
 | `pnpm db:deploy`        | `prisma migrate deploy`: apply pending migrations (production) |
-| `pnpm db:seed`          | Run `prisma/seed.ts`                                            |
+| `pnpm db:seed`          | Admin + demo data (`prisma/seed.ts`); refused on non-local databases unless `-- --with-demo` |
+| `pnpm db:create-admin`  | Create/update only the admin (production)                       |
 | `pnpm db:reset`         | Drop, re-migrate and re-seed the **dev** database               |
 | `pnpm db:studio`        | Prisma Studio                                                   |
 
@@ -181,6 +182,28 @@ are rejected.
 
 ## Deploying (Vercel + Neon or Supabase)
 
+**Checklist** (details in the steps below):
+
+- [ ] Code on GitHub; the first CI run is green
+- [ ] Postgres created; pooled + direct connection strings copied
+- [ ] Cloudinary account; cloud name + API key + API secret copied
+- [ ] Vercel project imported, all variables from step 3 set **before** the first deploy
+- [ ] Deployed; the build log shows `prisma migrate deploy` applying the migrations
+- [ ] Admin created with `pnpm db:create-admin` (no demo data)
+- [ ] Categories and collections created in `/admin/catalog`, then the real products
+- [ ] Test order placed and cancelled; one image upload checked
+
+### 0. GitHub
+
+Create an **empty** repository on GitHub (no README or license, so the histories don't clash), then:
+
+```bash
+git remote add origin https://github.com/<you>/flockoff.git
+git push -u origin main
+```
+
+The push runs CI (`.github/workflows/ci.yml`). Wait for it to pass before deploying.
+
 ### 1. Database
 
 Create a Postgres database and copy **two** connection strings:
@@ -212,28 +235,44 @@ environment variables for **Production** (and Preview, if you use preview deploy
 | `STORAGE_DRIVER` | `cloudinary` |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | from the Cloudinary dashboard |
 
-`AUTH_TRUST_HOST` isn't needed on Vercel (it's detected automatically).
+`AUTH_TRUST_HOST` isn't needed on Vercel (it's detected automatically). Node 22 is pinned in
+`package.json` (`engines`), matching CI.
+
+`NEXT_PUBLIC_SITE_URL` is baked in at build time, so after changing it, **redeploy**.
 
 Deploy. The `vercel-build` script runs `prisma migrate deploy` and then `next build`, so every
 deploy applies pending migrations before going live. `postinstall` generates the Prisma client.
 
+**Startup config check.** When a production server starts, `instrumentation.ts` checks the
+configuration (`lib/config-check.ts`) and refuses to start if something would break later. For
+example: a missing or placeholder `AUTH_SECRET`, local image storage on Vercel, missing Cloudinary
+keys, a `localhost` database. Each problem is logged as one `[config]` line in the Vercel function
+logs. Warnings, such as a missing `NEXT_PUBLIC_SITE_URL` or a Supabase pooler URL without
+`pgbouncer=true`, are logged without stopping the server.
+
 ### 4. First admin
 
-The seed creates the admin account **and demo products**. For a real launch, create only the
-admin, from your machine, pointing at the production database:
+From your machine, pointing at the production database (use the **direct** URL):
 
 ```bash
 DATABASE_URL="<direct url>" DIRECT_URL="<direct url>" \
 SEED_ADMIN_EMAIL="you@yourdomain" SEED_ADMIN_PASSWORD="<long random password>" \
-pnpm db:seed
+pnpm db:create-admin
 ```
 
-Then delete or hide the demo products from `/admin/products`. For a demo or staging site, keep
-them.
+This creates only the admin. Run it again later to reset the admin password; that also signs the
+admin out everywhere. The full `pnpm db:seed` (demo products) **refuses** to run against a
+non-local database, because it resets the demo products' stock. For a demo or staging site that
+should have them, run `pnpm db:seed -- --with-demo`. Never run that against the live shop.
+
+A fresh production database has no categories or collections: create them in `/admin/catalog`
+before adding products.
 
 ### 5. Check it
 
 - `/robots.txt` and `/sitemap.xml` use your `NEXT_PUBLIC_SITE_URL`.
+- Upload one product image in `/admin/products` and check it appears (this is the first real
+  Cloudinary call; the driver is only covered by mocked tests).
 - Place a test order, then cancel it in `/admin/orders` (this restocks it).
 
 ### Self-hosting instead of Vercel

@@ -121,5 +121,8 @@ const cloudinaryDriver: StorageDriver = {
 };
 
 export function getStorage(): StorageDriver {
-  return process.env.STORAGE_DRIVER === "cloudinary" ? cloudinaryDriver : localDriver;
+  if (process.env.STORAGE_DRIVER === "cloudinary") return cloudinaryDriver;
+  // Belt and braces with the startup config check: never write uploads to a disk that vanishes.
+  if (process.env.VERCEL) throw new Error("Image uploads need STORAGE_DRIVER=cloudinary on Vercel (no persistent disk).");
+  return localDriver;
 }
