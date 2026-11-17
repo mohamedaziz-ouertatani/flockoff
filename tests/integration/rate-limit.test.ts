@@ -87,6 +87,24 @@ describe("attemptLogin", () => {
     expect((await attemptLogin({ email, password }, ip())).status).toBe("rate_limited");
   }, 120_000);
 
+  it("a trusted device still logs in while the account is under an IP-rotating attack", async () => {
+    const { email, password } = await customer();
+    for (let i = 0; i < LIMITS.loginPerEmail.max; i++) {
+      await attemptLogin({ email, password: `guess-${i}` }, ip());
+    }
+    // New devices are locked out of the account...
+    expect((await attemptLogin({ email, password }, ip())).status).toBe("rate_limited");
+    // ...but the customer's own browser isn't.
+    const home = ip();
+    expect((await attemptLogin({ email, password }, home, { trustedDevice: true })).status).toBe("ok");
+
+    // A trusted device still gets only 5 wrong guesses per IP.
+    for (let i = 0; i < LIMITS.loginPerEmailIp.max; i++) {
+      expect((await attemptLogin({ email, password: `typo-${i}` }, home, { trustedDevice: true })).status).toBe("invalid");
+    }
+    expect((await attemptLogin({ email, password }, home, { trustedDevice: true })).status).toBe("rate_limited");
+  }, 120_000);
+
   it("caps attempts per IP across many different emails", async () => {
     const attacker = ip();
     const results = [];

@@ -28,6 +28,11 @@ test("customer can sign up, order, and see the order in their account", async ({
   await expect(page.getByRole("heading", { level: 1, name: "Hi, Sami" })).toBeVisible();
   await expect(page.getByText("No orders yet")).toBeVisible();
 
+  // This browser is now a trusted device for the account (exempt from the per-account lockout).
+  const td = (await page.context().cookies()).find((c) => c.name === "fo_td");
+  expect(td?.httpOnly).toBe(true);
+  expect(td?.value).toMatch(/^\d+\.[\w-]{43}$/);
+
   // Buy something. Checkout is prefilled from the account.
   await page.goto("/product/medina-street-tee");
   await page.getByRole("radio", { name: "L", exact: true }).click();

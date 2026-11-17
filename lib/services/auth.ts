@@ -23,12 +23,20 @@ export type LoginResult =
  * per-email limits; over any of them we refuse *without* checking the password (which also
  * skips the bcrypt cost). A correct password refunds the failure counters, so customers who
  * log in normally never accumulate strikes.
+ *
+ * `trustedDevice` (a valid signed cookie from an earlier successful login to this account) skips
+ * the per-email limit only: that limit exists to stop IP-rotating attackers, and without the
+ * exemption those same attackers could use it to lock the real customer out.
  */
-export async function attemptLogin(input: LoginInput, ip: string): Promise<LoginResult> {
+export async function attemptLogin(
+  input: LoginInput,
+  ip: string,
+  { trustedDevice = false }: { trustedDevice?: boolean } = {},
+): Promise<LoginResult> {
   const checks = await Promise.all([
     hit(LIMITS.loginPerIp, ip),
     hit(LIMITS.loginPerEmailIp, `${input.email}|${ip}`),
-    hit(LIMITS.loginPerEmail, input.email),
+    ...(trustedDevice ? [] : [hit(LIMITS.loginPerEmail, input.email)]),
   ]);
   const blocked = checks.filter((c) => !c.allowed);
   if (blocked.length > 0) {
@@ -38,7 +46,10 @@ export async function attemptLogin(input: LoginInput, ip: string): Promise<Login
   const user = await verifyCredentials(input);
   if (!user) return { status: "invalid" };
 
-  await Promise.all([refund(LIMITS.loginPerEmailIp, `${input.email}|${ip}`), refund(LIMITS.loginPerEmail, input.email)]);
+  await Promise.all([
+    refund(LIMITS.loginPerEmailIp, `${input.email}|${ip}`),
+    ...(trustedDevice ? [] : [refund(LIMITS.loginPerEmail, input.email)]),
+  ]);
   return { status: "ok", user };
 }
 

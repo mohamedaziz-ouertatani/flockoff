@@ -118,13 +118,21 @@ in the counter keys.
 | Limit | Allows | Why |
 | --- | --- | --- |
 | Failed logins, one account from one IP | 5 per 15 min | The main brake on password guessing |
-| Failed logins, one account from anywhere | 50 per hour | Caps guessing even from many IPs, but loose enough that one attacker can't easily lock a customer out |
+| Failed logins, one account from anywhere | 50 per hour | Caps guessing even from many IPs. Skipped on trusted devices (below) |
 | Any login attempt from one IP | 30 per 15 min | Generous for shared networks (offices, mobile carriers) |
 | New accounts from one IP | 10 per hour | Slows bulk account creation |
 
 Successful logins don't count against the failure limits. Login limits are enforced inside the
 Auth.js `authorize` step, so they also cover the direct `POST /api/auth/callback/credentials`
 endpoint, not just the form. Once a limit is hit, the password isn't checked at all.
+
+**Trusted devices.** An attacker with many IPs could use the per-account limit to lock a customer
+out for an hour. To prevent that, every successful login sets `fo_td`, an httpOnly cookie valid for
+90 days. It holds an expiry and an HMAC (keyed with `AUTH_SECRET`) of the account's email, and
+nothing personal. A browser with a valid `fo_td` for the account it's logging into skips the
+per-account limit but keeps the other two, so it still gets only 5 wrong passwords per 15 minutes.
+The cookie remembers one account per browser (the last one logged in). Rotating `AUTH_SECRET`
+invalidates every trusted device (`lib/services/trusted-device.ts`).
 
 **Client IPs come from `X-Forwarded-For`.** Vercel overwrites that header with the real client IP,
 so it's trustworthy there. If you self-host, run behind a reverse proxy (nginx, Caddy, Cloudflare)
