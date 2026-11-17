@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { changePassword, EmailTakenError, listAccountOrders, registerCustomer } from "@/lib/services/accounts";
-import { attemptLogin, verifyCredentials } from "@/lib/services/auth";
+import { attemptLogin, checkSession, verifyCredentials } from "@/lib/services/auth";
 import { LIMITS } from "@/lib/services/rate-limit";
 import { createOrder } from "@/lib/services/orders";
 import { changePasswordSchema, signupSchema } from "@/lib/validation/auth";
@@ -116,5 +116,40 @@ describe("changePassword", () => {
   it("rejects reusing the current password and mismatched confirmation", () => {
     expect(changePasswordSchema.safeParse({ currentPassword: OLD, newPassword: OLD, confirmPassword: OLD }).success).toBe(false);
     expect(changePasswordSchema.safeParse({ currentPassword: OLD, newPassword: NEW, confirmPassword: "nope" }).success).toBe(false);
+  });
+});
+
+describe("checkSession", () => {
+  it("is valid until a password change bumps the session version", async () => {
+    const email = newEmail();
+    const { id } = await registerCustomer(signup(email, "correct horse battery"));
+    const login = await attemptLogin({ email, password: "correct horse battery" }, "10.8.0.1");
+    if (login.status !== "ok") throw new Error("login failed");
+    const issued = login.user.sessionVersion;
+
+    expect(await checkSession(id, issued)).toEqual({ role: "CUSTOMER" });
+    // Tokens from before sessionVersion existed carry no version and count as 0.
+    expect(await checkSession(id, undefined)).toEqual({ role: "CUSTOMER" });
+
+    const r = await changePassword(
+      id,
+      changePasswordSchema.parse({ currentPassword: "correct horse battery", newPassword: "next password 1", confirmPassword: "next password 1" }),
+    );
+    expect(r.status).toBe("ok");
+    expect(await checkSession(id, issued)).toBeNull();
+    expect(await checkSession(id, undefined)).toBeNull();
+
+    const again = await attemptLogin({ email, password: "next password 1" }, "10.8.0.1");
+    if (again.status !== "ok") throw new Error("login failed");
+    expect(again.user.sessionVersion).toBe(issued + 1);
+    expect(await checkSession(id, again.user.sessionVersion)).toEqual({ role: "CUSTOMER" });
+  });
+
+  it("picks up role changes and rejects deleted users", async () => {
+    const { id } = await registerCustomer(signup(newEmail()));
+    await prisma.user.update({ where: { id }, data: { role: "ADMIN" } });
+    expect(await checkSession(id, 0)).toEqual({ role: "ADMIN" });
+    await prisma.user.delete({ where: { id } });
+    expect(await checkSession(id, 0)).toBeNull();
   });
 });

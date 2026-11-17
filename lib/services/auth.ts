@@ -29,7 +29,7 @@ export function deviceTokenFor(user: { id: string; passwordHash: string }) {
   return createTrustedDeviceToken(deviceBinding(user));
 }
 
-type SessionUser ={ id: string; email: string; name: string; role: "CUSTOMER" | "ADMIN" };
+type SessionUser = { id: string; email: string; name: string; role: "CUSTOMER" | "ADMIN"; sessionVersion: number };
 
 export type LoginResult =
   | { status: "ok"; user: SessionUser; /** Fresh trusted-device token to store in the browser (null without AUTH_SECRET). */ deviceToken: string | null }
@@ -69,8 +69,26 @@ export async function attemptLogin(input: LoginInput, ip: string, { deviceToken 
   return { status: "ok", user: toSessionUser(user), deviceToken: deviceTokenFor(user) };
 }
 
-function toSessionUser(user: { id: string; email: string; firstName: string; lastName: string; role: SessionUser["role"] }): SessionUser {
-  return { id: user.id, email: user.email, name: `${user.firstName} ${user.lastName}`, role: user.role };
+function toSessionUser(user: {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: SessionUser["role"];
+  sessionVersion: number;
+}): SessionUser {
+  return { id: user.id, email: user.email, name: `${user.firstName} ${user.lastName}`, role: user.role, sessionVersion: user.sessionVersion };
+}
+
+/**
+ * Whether a JWT session is still valid: the user exists and nothing (e.g. a password change) has
+ * bumped their sessionVersion since the token was issued. Returns the current role so role
+ * changes apply without a re-login. One primary-key lookup per call.
+ */
+export async function checkSession(userId: string, tokenVersion: number | undefined) {
+  const row = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, sessionVersion: true } });
+  if (!row || row.sessionVersion !== (tokenVersion ?? 0)) return null;
+  return { role: row.role };
 }
 
 /** Returns the user (without hash) if the credentials are valid, otherwise null. */

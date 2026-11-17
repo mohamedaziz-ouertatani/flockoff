@@ -22,7 +22,8 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   CANCELLED: { label: "Cancelled", cls: "bg-neutral-200 text-neutral-600" },
 };
 
-export default async function AccountPage() {
+export default async function AccountPage({ searchParams }: { searchParams: Promise<{ password?: string }> }) {
+  const { password } = await searchParams;
   const session = await auth();
   if (!session?.user?.id) redirect("/login?callbackUrl=/account");
 
@@ -131,7 +132,7 @@ export default async function AccountPage() {
           <h2 id="password-heading" className="mt-10 mb-4 text-[11px] font-semibold tracking-widest uppercase">
             Password
           </h2>
-          <ChangePasswordForm />
+          <ChangePasswordForm justChanged={password === "changed"} />
         </aside>
       </div>
     </div>

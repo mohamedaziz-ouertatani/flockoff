@@ -39,16 +39,18 @@ enum PaymentMethod {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  firstName    String
-  lastName     String
-  email        String    @unique
-  phone        String?
-  passwordHash String
-  role         Role      @default(CUSTOMER)
-  createdAt    DateTime  @default(now())
-  addresses    Address[]
-  orders       Order[]
+  id             String    @id @default(cuid())
+  firstName      String
+  lastName       String
+  email          String    @unique
+  phone          String?
+  passwordHash   String
+  role           Role      @default(CUSTOMER)
+  /// Bumped to sign the user out everywhere (e.g. on password change); copied into the JWT.
+  sessionVersion Int       @default(0)
+  createdAt      DateTime  @default(now())
+  addresses      Address[]
+  orders         Order[]
 }
 
 /// Fixed-window counters for rate limiting (login, sign-up). Keys never contain raw emails:
@@ -159,9 +161,9 @@ model Order {
 }
 
 model OrderItem {
-  id          String  @id @default(cuid())
+  id          String   @id @default(cuid())
   orderId     String
-  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   // Nullable + SetNull so deleting a product later never destroys order history
   variantId   String?
   variant     Variant? @relation(fields: [variantId], references: [id], onDelete: SetNull)

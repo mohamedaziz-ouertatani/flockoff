@@ -120,8 +120,12 @@ person's orders, including their phone number and home address.
 Customers can change their password on `/account` by entering the current one. Wrong current
 passwords are limited to 5 per 15 minutes per account, so a hijacked session can't be used to guess
 it. The write is compare-and-set, so two simultaneous changes can't overwrite each other. A change
-revokes the trusted-device cookies on the account's other browsers (see *Trusted devices*). Sessions
-already open elsewhere stay logged in until they expire, because sessions are stateless JWTs.
+revokes the trusted-device cookies on the account's other browsers (see *Trusted devices*) and signs the account out on every other device: each user has a
+`sessionVersion` that is copied into the JWT at login, the server-side `jwt` callback in `auth.ts`
+checks it on every session read (one primary-key lookup), and a password change bumps it. The
+browser that made the change is signed in again automatically. The same check means role changes
+and deleted users take effect immediately on server-rendered pages and actions. (The edge
+middleware can't query the database, so on `/admin` the check happens in `requireAdmin()`.)
 
 **Rate limiting.** Login and sign-up are rate-limited with counters stored in Postgres
 (`lib/services/rate-limit.ts`), so the limits hold across serverless instances. Emails are hashed

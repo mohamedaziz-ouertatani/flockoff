@@ -22,7 +22,9 @@ export const authConfig = {
       if (user) {
         token.id = user.id as string;
         token.role = user.role;
+        token.sv = user.sessionVersion ?? 0;
       }
+      // auth.ts adds a database check on top of this (not possible here: this also runs on the edge).
       return token;
     },
     session({ session, token }) {

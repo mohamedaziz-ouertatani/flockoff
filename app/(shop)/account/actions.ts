@@ -1,7 +1,8 @@
 "use server";
 
+import { AuthError } from "next-auth";
 import { z } from "zod";
-import { auth } from "@/auth";
+import { auth, signIn } from "@/auth";
 import { changePassword } from "@/lib/services/accounts";
 import { humanizeWait } from "@/lib/services/rate-limit";
 import { setTrustedDeviceCookie } from "@/lib/trusted-device-cookie";
@@ -31,9 +32,23 @@ export async function changePasswordAction(_prev: ChangePasswordState, formData:
 
   const result = await changePassword(session.user.id, parsed.data);
   switch (result.status) {
-    case "ok":
+    case "ok": {
       await setTrustedDeviceCookie(result.deviceToken);
+      // The change ended every session, this one included; start a fresh one here so only the
+      // other devices are signed out. It must redirect: re-rendering the page inside this action
+      // would still read the old session cookie from the request and sign the browser out again.
+      try {
+        await signIn("credentials", {
+          email: session.user.email,
+          password: parsed.data.newPassword,
+          redirectTo: "/account?password=changed",
+        });
+      } catch (err) {
+        if (err instanceof AuthError) return { ok: true, error: "Password changed. Please log in again with your new password." };
+        throw err; // NEXT_REDIRECT must propagate
+      }
       return { ok: true };
+    }
     case "wrong_password":
       return { fieldErrors: { currentPassword: "That isn't your current password." } };
     case "rate_limited":

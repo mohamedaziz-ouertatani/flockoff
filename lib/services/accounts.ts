@@ -85,8 +85,8 @@ export type ChangePasswordResult =
  *   can't silently overwrite each other.
  * - The new hash revokes every trusted-device token issued for the old password; the caller
  *   stores the returned token so this browser stays trusted.
- *
- * Not done (JWT sessions): sessions already open on other devices stay valid until they expire.
+ * - It bumps sessionVersion, which ends every existing session for the account, including the
+ *   caller's: the caller signs the current browser in again with the new password.
  */
 export async function changePassword(userId: string, input: ChangePasswordInput): Promise<ChangePasswordResult> {
   const limit = await hit(LIMITS.passwordChangePerUser, userId);
@@ -97,7 +97,11 @@ export async function changePassword(userId: string, input: ChangePasswordInput)
   if (!(await bcrypt.compare(input.currentPassword, user.passwordHash))) return { status: "wrong_password" };
 
   const passwordHash = await hashPassword(input.newPassword);
-  const { count } = await prisma.user.updateMany({ where: { id: userId, passwordHash: user.passwordHash }, data: { passwordHash } });
+  const { count } = await prisma.user.updateMany({
+    where: { id: userId, passwordHash: user.passwordHash },
+    // Bumping sessionVersion signs this account out everywhere (see the jwt callback in auth.ts).
+    data: { passwordHash, sessionVersion: { increment: 1 } },
+  });
   await refund(LIMITS.passwordChangePerUser, userId);
   if (count === 0) return { status: "conflict" };
   return { status: "ok", deviceToken: deviceTokenFor({ id: userId, passwordHash }) };

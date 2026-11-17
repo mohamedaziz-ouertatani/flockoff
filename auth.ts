@@ -1,7 +1,7 @@
 import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { authConfig } from "@/auth.config";
-import { attemptLogin } from "@/lib/services/auth";
+import { attemptLogin, checkSession } from "@/lib/services/auth";
 import { clientIp } from "@/lib/services/rate-limit";
 import { readCookie, TRUSTED_DEVICE_COOKIE } from "@/lib/services/trusted-device";
 import { setTrustedDeviceCookie } from "@/lib/trusted-device-cookie";
@@ -14,6 +14,23 @@ export class RateLimitedSignin extends CredentialsSignin {
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  callbacks: {
+    ...authConfig.callbacks,
+    /**
+     * Node-only addition to the edge-safe jwt callback: on every server-side session read, check
+     * the token's sessionVersion against the database. A password change bumps it, which signs
+     * the account out on every other device (returning null ends the session). The middleware
+     * keeps using the edge callback, so /admin pages are also checked by requireAdmin().
+     */
+    async jwt(params) {
+      const token = await authConfig.callbacks.jwt(params);
+      if (params.user) return token; // just signed in: version comes from the user row
+      if (!token.id) return null;
+      const current = await checkSession(token.id, token.sv);      if (!current) return null;
+      token.role = current.role;
+      return token;
+    },
+  },
   providers: [
     Credentials({
       credentials: { email: {}, password: {} },

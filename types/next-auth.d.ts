@@ -5,6 +5,7 @@ type AppRole = "CUSTOMER" | "ADMIN";
 declare module "next-auth" {
   interface User {
     role: AppRole;
+    sessionVersion?: number;
   }
   interface Session {
     user: { id: string; role: AppRole } & DefaultSession["user"];
@@ -16,5 +17,7 @@ declare module "@auth/core/jwt" {
   interface JWT {
     id: string;
     role: AppRole;
+    /** User.sessionVersion at login; missing on tokens issued before it existed (treated as 0). */
+    sv?: number;
   }
 }

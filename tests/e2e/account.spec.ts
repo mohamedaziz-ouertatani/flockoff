@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 /** A new customer signs up, buys something, and finds it in their order history. */
-test("customer can sign up, order, and see the order in their account", async ({ page }) => {
+test("customer can sign up, order, and see the order in their account", async ({ page, browser }) => {
   const email = `e2e-${Date.now()}@test.local`;
   const password = "e2e correct horse";
 
@@ -57,6 +57,15 @@ test("customer can sign up, order, and see the order in their account", async ({
   await expect(row).toContainText("Medina Street Tee (L)");
   await expect(row).toContainText("77 TND");
 
+  // The same customer is also logged in on another device.
+  const otherDevice = await browser.newContext();
+  const other = await otherDevice.newPage();
+  await other.goto("/login");
+  await other.getByLabel("Email").fill(email);
+  await other.getByLabel("Password").fill(password);
+  await other.getByRole("button", { name: "Sign in" }).click();
+  await expect(other).toHaveURL("/account");
+
   // Change the password: a wrong current password is refused inline, then it works.
   const newPassword = "e2e brand new passphrase";
   await page.getByLabel("Current password").fill("not my password");
@@ -70,12 +79,20 @@ test("customer can sign up, order, and see the order in their account", async ({
   await page.getByLabel("New password", { exact: true }).fill(newPassword);
   await page.getByLabel("Confirm new password").fill(newPassword);
   await page.getByRole("button", { name: "Change password" }).click();
+  await expect(page).toHaveURL("/account?password=changed");
   await expect(page.getByText("Password changed.")).toBeVisible();
   await expect(page.getByLabel("Current password")).toHaveValue("");
   // This browser got a new trusted-device token for the new password.
   const newToken = (await page.context().cookies()).find((c) => c.name === "fo_td")?.value;
   expect(newToken).toMatch(/^\d+\.[\w-]{43}$/);
   expect(newToken).not.toBe(oldToken);
+
+  // This browser stays logged in; the other device is signed out.
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1, name: "Hi, Sami" })).toBeVisible();
+  await other.goto("/account");
+  await expect(other).toHaveURL(/\/login/);
+  await otherDevice.close();
 
   await page.getByRole("button", { name: "Sign out" }).click();
   // Wait for sign-out to finish; navigating earlier would still carry the old session.

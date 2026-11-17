@@ -14,8 +14,10 @@ const FIELDS: { name: ChangePasswordField; label: string; autoComplete: string; 
 ];
 
 /** Passwords are never echoed back, so React 19's post-action reset clears the fields as intended. */
-export function ChangePasswordForm() {
+export function ChangePasswordForm({ justChanged = false }: { justChanged?: boolean }) {
   const [state, formAction, pending] = useActionState<ChangePasswordState, FormData>(changePasswordAction, {});
+  // After a successful change the action redirects here with ?password=changed (fresh session).
+  const showSuccess = (justChanged && !state.error && !state.fieldErrors) || (state.ok && !state.error);
 
   return (
     <form action={formAction} noValidate className="flex flex-col gap-4 border p-5">
@@ -53,9 +55,9 @@ export function ChangePasswordForm() {
           {state.error}
         </p>
       )}
-      {state.ok && (
+      {showSuccess && (
         <p role="status" className="text-sm text-emerald-700">
-          Password changed. Other browsers that were remembered for this account will need the new password.
+          Password changed. You&apos;ve been signed out on your other devices.
         </p>
       )}
       <Button type="submit" disabled={pending} variant="outline">
