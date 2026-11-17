@@ -274,6 +274,19 @@ admin out everywhere. The full `pnpm db:seed` (demo products) **refuses** to run
 non-local database, because it resets the demo products' stock. For a demo or staging site that
 should have them, run `pnpm db:seed -- --with-demo`. Never run that against the live shop.
 
+**No database password at hand?** This happens when the database came from Vercel's Supabase
+integration. Instead: sign up on the live site with the admin's email, then run this in Supabase's
+**SQL Editor**:
+
+```sql
+UPDATE "User" SET role = 'ADMIN' WHERE email = 'you@example.com';  -- emails are stored lowercase
+```
+
+Then log out and back in, because the role is read into the session at login. Don't reset the
+database password to get around this: the deployed app connects with the one the integration
+stored in Vercel. On Supabase's free plan the `db.<ref>.supabase.co` direct host is IPv6-only;
+from a network without IPv6, use the *Session pooler* string (port 5432) instead.
+
 A fresh production database has no categories or collections: create them in `/admin/catalog`
 before adding products.
 
