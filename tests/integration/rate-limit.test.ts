@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { registerCustomer } from "@/lib/services/accounts";
-import { attemptLogin } from "@/lib/services/auth";
+import { attemptLogin, hashPassword } from "@/lib/services/auth";
 import { hit, LIMITS, refund, type Limit } from "@/lib/services/rate-limit";
 import { signupSchema } from "@/lib/validation/auth";
 
@@ -53,6 +53,12 @@ describe("attemptLogin", () => {
     return { email, password };
   }
 
+  async function tokenFrom(email: string, password: string, from: string) {
+    const r = await attemptLogin({ email, password }, from);
+    if (r.status !== "ok" || !r.deviceToken) throw new Error(`login failed: ${r.status}`);
+    return r.deviceToken;
+  }
+
   it("after 5 wrong passwords from one IP, refuses even the right password from that IP, but not from another", async () => {
     const { email, password } = await customer();
     const attacker = ip();
@@ -89,20 +95,48 @@ describe("attemptLogin", () => {
 
   it("a trusted device still logs in while the account is under an IP-rotating attack", async () => {
     const { email, password } = await customer();
+    const home = ip();
+    const deviceToken = await tokenFrom(email, password, home);
+
     for (let i = 0; i < LIMITS.loginPerEmail.max; i++) {
       await attemptLogin({ email, password: `guess-${i}` }, ip());
     }
     // New devices are locked out of the account...
     expect((await attemptLogin({ email, password }, ip())).status).toBe("rate_limited");
     // ...but the customer's own browser isn't.
-    const home = ip();
-    expect((await attemptLogin({ email, password }, home, { trustedDevice: true })).status).toBe("ok");
+    expect((await attemptLogin({ email, password }, home, { deviceToken })).status).toBe("ok");
+    // A forged or foreign token doesn't help.
+    expect((await attemptLogin({ email, password }, ip(), { deviceToken: `${Date.now() + 60_000}.forged` })).status).toBe("rate_limited");
 
     // A trusted device still gets only 5 wrong guesses per IP.
     for (let i = 0; i < LIMITS.loginPerEmailIp.max; i++) {
-      expect((await attemptLogin({ email, password: `typo-${i}` }, home, { trustedDevice: true })).status).toBe("invalid");
+      expect((await attemptLogin({ email, password: `typo-${i}` }, home, { deviceToken })).status).toBe("invalid");
     }
-    expect((await attemptLogin({ email, password }, home, { trustedDevice: true })).status).toBe("rate_limited");
+    expect((await attemptLogin({ email, password }, home, { deviceToken })).status).toBe("rate_limited");
+  }, 120_000);
+
+  it("a stolen device token still has a per-account cap, even across rotating IPs", async () => {
+    const { email, password } = await customer();
+    const deviceToken = await tokenFrom(email, password, ip());
+    const statuses = [];
+    for (let i = 0; i <= LIMITS.loginPerEmailTrusted.max; i++) {
+      statuses.push((await attemptLogin({ email, password: `guess-${i}` }, ip(), { deviceToken })).status);
+    }
+    expect(statuses.slice(0, LIMITS.loginPerEmailTrusted.max).every((s) => s === "invalid")).toBe(true);
+    expect(statuses.at(-1)).toBe("rate_limited");
+  }, 120_000);
+
+  it("changing the password revokes existing device tokens", async () => {
+    const { email, password } = await customer();
+    const deviceToken = await tokenFrom(email, password, ip());
+    const newPassword = "a whole new password";
+    await prisma.user.update({ where: { email }, data: { passwordHash: await hashPassword(newPassword) } });
+
+    for (let i = 0; i < LIMITS.loginPerEmail.max; i++) {
+      await attemptLogin({ email, password: `guess-${i}` }, ip());
+    }
+    // The old token no longer grants the trusted bucket.
+    expect((await attemptLogin({ email, password: newPassword }, ip(), { deviceToken })).status).toBe("rate_limited");
   }, 120_000);
 
   it("caps attempts per IP across many different emails", async () => {

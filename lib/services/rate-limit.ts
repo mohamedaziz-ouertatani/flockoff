@@ -18,6 +18,9 @@ export const LIMITS = {
   loginPerEmailIp: { name: "login:email-ip", max: 5, windowMs: 15 * 60_000 },
   /** Failed logins for one account from anywhere. Loose, so an attacker can't easily lock a customer out. */
   loginPerEmail: { name: "login:email", max: 50, windowMs: 60 * 60_000 },
+  /** Failed logins on one account from its trusted devices (a separate bucket, so attackers can't
+   *  exhaust it without a valid device token, but a stolen token still can't guess without limit). */
+  loginPerEmailTrusted: { name: "login:email:trusted", max: 50, windowMs: 60 * 60_000 },
   /** New accounts from one IP. */
   signupPerIp: { name: "signup:ip", max: 10, windowMs: 60 * 60_000 },
 } as const satisfies Record<string, Limit>;

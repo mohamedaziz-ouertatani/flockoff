@@ -118,7 +118,8 @@ in the counter keys.
 | Limit | Allows | Why |
 | --- | --- | --- |
 | Failed logins, one account from one IP | 5 per 15 min | The main brake on password guessing |
-| Failed logins, one account from anywhere | 50 per hour | Caps guessing even from many IPs. Skipped on trusted devices (below) |
+| Failed logins, one account from anywhere | 50 per hour | Caps guessing even from many IPs. Trusted devices (below) are counted separately |
+| Failed logins, one account from its trusted devices | 50 per hour | Caps guessing with a stolen trusted-device cookie |
 | Any login attempt from one IP | 30 per 15 min | Generous for shared networks (offices, mobile carriers) |
 | New accounts from one IP | 10 per hour | Slows bulk account creation |
 
@@ -128,11 +129,14 @@ endpoint, not just the form. Once a limit is hit, the password isn't checked at 
 
 **Trusted devices.** An attacker with many IPs could use the per-account limit to lock a customer
 out for an hour. To prevent that, every successful login sets `fo_td`, an httpOnly cookie valid for
-90 days. It holds an expiry and an HMAC (keyed with `AUTH_SECRET`) of the account's email, and
-nothing personal. A browser with a valid `fo_td` for the account it's logging into skips the
-per-account limit but keeps the other two, so it still gets only 5 wrong passwords per 15 minutes.
-The cookie remembers one account per browser (the last one logged in). Rotating `AUTH_SECRET`
-invalidates every trusted device (`lib/services/trusted-device.ts`).
+90 days. It holds an expiry and an HMAC (keyed with `AUTH_SECRET`) of the account's id and a
+fingerprint of its current password hash, and nothing personal. A browser with a valid `fo_td` for
+the account it's logging into is counted in a separate per-account bucket, which attackers without
+the cookie can't fill, so they can't lock the customer out of that browser. The per-IP and
+per-account-per-IP limits still apply, and someone who steals the cookie still gets at most 50
+guesses per hour. Changing the password revokes every existing cookie for that account, and
+rotating `AUTH_SECRET` revokes all of them. The cookie remembers one account per browser (the last
+one logged in) (`lib/services/trusted-device.ts`).
 
 **Client IPs come from `X-Forwarded-For`.** Vercel overwrites that header with the real client IP,
 so it's trustworthy there. If you self-host, run behind a reverse proxy (nginx, Caddy, Cloudflare)
