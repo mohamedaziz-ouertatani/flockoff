@@ -64,6 +64,12 @@ uniquely named fixtures, so leftover rows from earlier runs don't matter.
 The e2e test builds the app into `.next-e2e` and serves it on port 3100 with the test database,
 so it can run while `pnpm dev` is up. First time only: `pnpm exec playwright install chromium`.
 
+**CI.** `.github/workflows/ci.yml` runs on every push to `main` and on every pull request:
+typecheck, lint, unit and integration tests, then the e2e tests, against a throwaway Postgres 16
+service container. It needs no repository secrets: the database and `AUTH_SECRET` it uses exist
+only inside the job. If the e2e tests fail, the Playwright report and traces are uploaded as the
+`playwright-report` artifact (kept 7 days).
+
 ## How it's built
 
 ```
