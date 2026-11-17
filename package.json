@@ -21,7 +21,7 @@
     "test:watch": "vitest --project unit",
     "test:e2e": "playwright test",
     "db:deploy": "prisma migrate deploy",
-    "vercel-build": "prisma migrate deploy && next build --turbopack"
+    "vercel-build": "tsx scripts/vercel-build.ts"
   },
   "dependencies": {
     "@auth/core": "0.41.3",

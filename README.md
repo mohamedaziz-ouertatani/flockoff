@@ -214,7 +214,12 @@ Create a Postgres database and copy **two** connection strings:
 | **Supabase** | *Transaction pooler*, port **6543**, add `?pgbouncer=true&connection_limit=1` | *Session pooler* or direct connection, port **5432** |
 
 The pooled URL keeps serverless functions from exhausting connections. Migrations need the direct
-one.
+one; the running app only uses `DATABASE_URL`.
+
+**Connected the database through Vercel's Neon or Supabase integration?** They create their own
+variable names. The build accepts Neon's `DATABASE_URL_UNPOOLED` or Supabase's
+`POSTGRES_URL_NON_POOLING` in place of `DIRECT_URL`. Supabase's integration doesn't set
+`DATABASE_URL`, though: add it yourself with the value of `POSTGRES_PRISMA_URL`.
 
 ### 2. Images
 
@@ -240,8 +245,12 @@ environment variables for **Production** (and Preview, if you use preview deploy
 
 `NEXT_PUBLIC_SITE_URL` is baked in at build time, so after changing it, **redeploy**.
 
-Deploy. The `vercel-build` script runs `prisma migrate deploy` and then `next build`, so every
-deploy applies pending migrations before going live. `postinstall` generates the Prisma client.
+Deploy. The `vercel-build` script (`scripts/vercel-build.ts`) checks the database variables, runs
+`prisma migrate deploy`, then `next build`, so every deploy applies pending migrations before going
+live. If a database variable is missing, the build stops with a message naming it and the Vercel
+environment to add it to. Environment variables are per environment (Production / Preview /
+Development) and only apply to deployments made **after** they're added, so redeploy after
+changing them. `postinstall` generates the Prisma client.
 
 **Startup config check.** When a production server starts, `instrumentation.ts` checks the
 configuration (`lib/config-check.ts`) and refuses to start if something would break later. For
