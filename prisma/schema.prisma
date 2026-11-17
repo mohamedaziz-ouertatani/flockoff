@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// All money fields are integer millimes (1 TND = 1000 millimes).
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+enum Size {
+  XS
+  S
+  M
+  L
+  XL
+  XXL
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  COD
+}
+
+model User {
+  id           String    @id @default(cuid())
+  firstName    String
+  lastName     String
+  email        String    @unique
+  phone        String?
+  passwordHash String
+  role         Role      @default(CUSTOMER)
+  createdAt    DateTime  @default(now())
+  addresses    Address[]
+  orders       Order[]
+}
+
+model Address {
+  id      String  @id @default(cuid())
+  userId  String?
+  user    User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  street  String
+  city    String
+  zip     String
+  country String  @default("Tunisia")
+
+  @@index([userId])
+}
+
+model Collection {
+  id       String    @id @default(cuid())
+  name     String
+  slug     String    @unique
+  products Product[]
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  name     String
+  slug     String    @unique
+  products Product[]
+}
+
+model Product {
+  id           String         @id @default(cuid())
+  name         String
+  slug         String         @unique
+  description  String
+  price        Int // millimes
+  categoryId   String
+  category     Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  collectionId String?
+  collection   Collection?    @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+  isFeatured   Boolean        @default(false)
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  images       ProductImage[]
+  variants     Variant[]
+
+  @@index([categoryId])
+  @@index([collectionId])
+  @@index([isActive, createdAt])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  position  Int     @default(0)
+
+  @@index([productId, position])
+}
+
+model Variant {
+  id         String      @id @default(cuid())
+  productId  String
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  size       Size
+  stock      Int         @default(0) // CHECK (stock >= 0) added in migration SQL
+  orderItems OrderItem[]
+
+  @@unique([productId, size])
+}
+
+model Order {
+  id            String        @id @default(cuid())
+  shortCode     String        @unique // e.g. FO-7K2Q
+  userId        String?
+  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // Guest / contact details (filled for logged-in users too, as a snapshot)
+  email         String
+  firstName     String
+  lastName      String
+  phone         String
+  // Address snapshot
+  street        String
+  city          String
+  zip           String
+  country       String        @default("Tunisia")
+  status        OrderStatus   @default(PENDING)
+  subtotal      Int // millimes
+  shippingFee   Int // millimes
+  total         Int // millimes
+  paymentMethod PaymentMethod @default(COD)
+  createdAt     DateTime      @default(now())
+  items         OrderItem[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([userId])
+}
+
+model OrderItem {
+  id          String  @id @default(cuid())
+  orderId     String
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  // Nullable + SetNull so deleting a product later never destroys order history
+  variantId   String?
+  variant     Variant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  productName String // snapshot
+  size        Size // snapshot
+  unitPrice   Int // snapshot, millimes
+  quantity    Int
+
+  @@index([orderId])
+  @@index([variantId])
+}
