@@ -217,9 +217,9 @@ The pooled URL keeps serverless functions from exhausting connections. Migration
 one; the running app only uses `DATABASE_URL`.
 
 **Connected the database through Vercel's Neon or Supabase integration?** They create their own
-variable names. The build accepts Neon's `DATABASE_URL_UNPOOLED` or Supabase's
-`POSTGRES_URL_NON_POOLING` in place of `DIRECT_URL`. Supabase's integration doesn't set
-`DATABASE_URL`, though: add it yourself with the value of `POSTGRES_PRISMA_URL`.
+variable names, and the app accepts them: Neon's `DATABASE_URL_UNPOOLED` or Supabase's
+`POSTGRES_URL_NON_POOLING` in place of `DIRECT_URL`, and Supabase's `POSTGRES_PRISMA_URL` in
+place of `DATABASE_URL` (at build and at runtime). Nothing to copy by hand.
 
 ### 2. Images
 

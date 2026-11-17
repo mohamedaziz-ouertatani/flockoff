@@ -26,8 +26,9 @@ export function checkProductionConfig(env: Env): ConfigReport {
   }
 
   // Database
-  const db = env.DATABASE_URL ?? "";
-  if (!db) errors.push("DATABASE_URL is not set.");
+  // Same fallback as lib/db.ts: the Supabase integration names the pooled URL POSTGRES_PRISMA_URL.
+  const db = env.DATABASE_URL || env.POSTGRES_PRISMA_URL || "";
+  if (!db) errors.push("DATABASE_URL is not set (nor POSTGRES_PRISMA_URL from the Supabase integration).");
   else {
     try {
       const u = new URL(db);

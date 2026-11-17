@@ -13,9 +13,10 @@ if (!db.ok) {
   console.error("");
   process.exit(1);
 }
+if (db.databaseFrom !== "DATABASE_URL") console.log(`Using ${db.databaseFrom} as DATABASE_URL.`);
 if (db.directFrom !== "DIRECT_URL") console.log(`Using ${db.directFrom} as DIRECT_URL for migrations.`);
 
-const env = { ...process.env, DIRECT_URL: db.directUrl };
+const env = { ...process.env, DATABASE_URL: db.databaseUrl, DIRECT_URL: db.directUrl };
 const run = (args: string[]) => {
   const r = spawnSync("pnpm", ["exec", ...args], { stdio: "inherit", env, shell: process.platform === "win32" });
   if (r.status !== 0) process.exit(r.status ?? 1);

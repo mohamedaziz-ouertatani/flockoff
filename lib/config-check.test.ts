@@ -63,3 +63,10 @@ describe("checkProductionConfig", () => {
     expect(checkProductionConfig({ ...GOOD_VERCEL, NEXT_PUBLIC_SITE_URL: "http://flockoff.tn" }).warnings.join()).toMatch(/https/);
   });
 });
+
+describe("checkProductionConfig with the Supabase integration", () => {
+  it("accepts POSTGRES_PRISMA_URL in place of DATABASE_URL", () => {
+    const env = { ...GOOD_VERCEL, DATABASE_URL: undefined, POSTGRES_PRISMA_URL: "postgresql://u:p@aws-0-eu.pooler.supabase.com:6543/postgres?pgbouncer=true" };
+    expect(checkProductionConfig(env)).toEqual({ errors: [], warnings: [] });
+  });
+});
