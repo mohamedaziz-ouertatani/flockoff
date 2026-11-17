@@ -3,7 +3,7 @@
 Online store for FLOCK OFF, an independent streetwear brand from Tunis. Customer shop and admin
 panel in one Next.js 15 app. See [CLAUDE.md](CLAUDE.md) for the full build spec.
 
-> Status: **Phase 3** — cart, checkout (cash on delivery) and order confirmation.
+> Status: **Phase 4** — admin panel: dashboard, orders, products & stock with image upload, customers, categories & collections.
 
 ## Stack
 
@@ -77,3 +77,32 @@ Deployment notes (Vercel + Neon/Supabase) arrive in Phase 5.
 - Order confirmation pages (`/order/FO-XXXX`) show personal details only to the browser that
   placed the order (httpOnly cookie of order ids), the owning account, or an admin. Short codes
   are guessable, so everyone else sees just the status.
+
+## Admin panel (`/admin`)
+
+- **Access:** `middleware.ts` gates `/admin` pages, the admin layout re-checks, and every admin server
+  action calls `assertAdmin()` itself, because server actions are POST endpoints that middleware
+  does not cover.
+- **Orders:** status moves forward only (Pending → Confirmed → Shipped → Delivered). Cancelling is a
+  separate action that restocks in the same transaction and is refused once delivered. Status
+  changes and cancels are compare-and-set, so two admins can't double-restock.
+- **Stock edits** only apply if the stock is still what the admin saw. A sale in between is
+  reported instead of being overwritten.
+- **Customers** are grouped from orders by email (most checkouts are guests). Customer pages are
+  keyed by an opaque id, so emails never appear in URLs.
+- **Dashboard revenue** excludes cancelled orders; "collected" counts delivered orders only (cash on
+  delivery).
+
+## Image storage
+
+`lib/storage.ts` exposes one interface with two drivers, chosen by `STORAGE_DRIVER`:
+
+- `local` (default): files in `./uploads` (gitignored), served by `app/uploads/[file]`. For local
+  development only, since serverless hosts have no persistent disk.
+- `cloudinary`: signed uploads; set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`,
+  `CLOUDINARY_API_SECRET`. **Not yet tested against a real Cloudinary account.**
+
+Uploads are validated by file content (JPEG/PNG/WebP/AVIF magic bytes, max 5 MB), not by the
+browser-reported type, so renamed files and SVGs are rejected.
+
+To build without disturbing a running dev server: `NEXT_DIST_DIR=.next-build pnpm build`.
