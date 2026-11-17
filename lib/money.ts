@@ -31,5 +31,18 @@ export function tndToMillimes(input: string | number): number {
   return neg ? -value : value;
 }
 
+/** Millimes -> plain TND string for inputs/URLs ("180", "180.5"). No currency suffix. */
+export function millimesToTndInput(millimes: number): string {
+  if (!Number.isSafeInteger(millimes)) {
+    throw new TypeError(`millimesToTndInput expects integer millimes, got ${millimes}`);
+  }
+  const sign = millimes < 0 ? "-" : "";
+  const abs = Math.abs(millimes);
+  const dinars = Math.floor(abs / MILLIMES_PER_TND);
+  const rest = abs % MILLIMES_PER_TND;
+  if (rest === 0) return `${sign}${dinars}`;
+  return `${sign}${dinars}.${String(rest).padStart(3, "0").replace(/0+$/, "")}`;
+}
+
 /** Flat shipping fee: 7 TND. */
 export const SHIPPING_FEE_MILLIMES = 7 * MILLIMES_PER_TND;

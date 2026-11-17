@@ -10,9 +10,9 @@ export default async function LoginPage({
 }) {
   const { callbackUrl } = await searchParams;
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 p-6">
-      <h1 className="text-2xl font-bold tracking-tight">Log in</h1>
+    <div className="mx-auto flex max-w-sm flex-col gap-6 px-4 py-20">
+      <h1 className="font-display text-4xl tracking-wide uppercase">Log in</h1>
       <LoginForm callbackUrl={callbackUrl ?? "/"} />
-    </main>
+    </div>
   );
 }

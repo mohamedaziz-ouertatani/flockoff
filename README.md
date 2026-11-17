@@ -3,7 +3,7 @@
 Online store for FLOCK OFF, an independent streetwear brand from Tunis. Customer shop and admin
 panel in one Next.js 15 app. See [CLAUDE.md](CLAUDE.md) for the full build spec.
 
-> Status: **Phase 1** — scaffold, database, seed, money helper, auth with admin gate.
+> Status: **Phase 2** — storefront: home, shop with URL filters, search, product page.
 
 ## Stack
 
@@ -43,12 +43,13 @@ Postgres is mapped to host port **5434** to avoid clashing with a native Postgre
 ## Layout
 
 ```
-app/(shop)/           storefront routes (login for now)
+app/(shop)/           storefront: home, /shop, /search, /product/[slug], /login
 app/(admin)/admin/    admin routes — gated by middleware.ts + a server-side check in the layout
 app/placeholder/      SVG placeholder product images (solid color + name)
 auth.config.ts        edge-safe Auth.js config (used by middleware)
 auth.ts               full Auth.js config with the Credentials provider
 lib/money.ts          formatTND / tndToMillimes — money is always integer millimes
+components/shop/      storefront components; components/ui/ is shadcn/ui
 lib/services/         business logic (server only)
 lib/validation/       Zod schemas shared by client and server
 prisma/               schema, migrations, seed
