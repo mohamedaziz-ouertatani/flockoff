@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { E2E_ADMIN } from "../../playwright.config";
 
 /**
  * Guest checkout, end to end: product page -> cart -> checkout -> confirmation.
@@ -54,6 +55,7 @@ test("guest can buy a product with cash on delivery", async ({ page }) => {
 
   // Confirmation page with the server-computed total; the cart is emptied.
   await expect(page).toHaveURL(/\/order\/FO-[2-9A-HJ-NP-Z]{4}$/);
+  const shortCode = page.url().split("/").pop()!;
   await expect(page.getByRole("heading", { level: 1, name: "Thanks, Yasmine" })).toBeVisible();
   await expect(page.getByText("Have 157 TND ready in cash")).toBeVisible();
   await expect(page.getByText("+216 22 123 456").first()).toBeVisible();
@@ -64,4 +66,16 @@ test("guest can buy a product with cash on delivery", async ({ page }) => {
   await page.goto("/product/migration-tee-bone");
   await page.getByRole("radio", { name: "M", exact: true }).click();
   await expect(page.locator("#qty-hint")).toHaveText(`${available - 2} available`);
+
+  // The admin sees the order, with its date in the "Order date" column (the old site showed IDs there).
+  await page.goto(`/login?callbackUrl=${encodeURIComponent(`/admin/orders?q=${shortCode}`)}`);
+  await page.getByLabel("Email").fill(E2E_ADMIN.email);
+  await page.getByLabel("Password").fill(E2E_ADMIN.password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/admin\/orders\?q=/);
+  const row = page.getByRole("row", { name: new RegExp(shortCode) });
+  const dateCol = await page.getByRole("columnheader").allTextContents().then((h) => h.indexOf("Order date"));
+  expect(dateCol).toBeGreaterThan(-1);
+  await expect(row.getByRole("cell").nth(dateCol)).toHaveText(/^\d{1,2} [A-Z][a-z]{2} \d{4}, \d{2}:\d{2}$/);
+  await expect(row).toContainText("157 TND");
 });
